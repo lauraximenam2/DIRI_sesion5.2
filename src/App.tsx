@@ -3,14 +3,13 @@ import React, { useState, Suspense } from 'react';
 import { MenuItem } from './entities/entities';
 import './App.css';
 import FoodOrder from './components/FoodOrder';
+import { MenuProvider, useMenu } from './context/MenuContext'; 
 
 //Usamos React.lazy para cargar el componente Foods de forma diferida
 const LazyFoods = React.lazy(() => import("./components/Foods"));
 
-function App() {
-
   //Estado inicial de los elementos del menú
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([
+  const initialMenuItemsData: MenuItem[] = [    
     {
       id: 1,
       name: "Hamburguesa de Pollo",
@@ -42,8 +41,11 @@ function App() {
       desc: "Helado de fresa, chocolate o vainilla.",
       price: 5,
       image: "ice.png",
-    },
-  ]);
+    }
+  ];
+
+
+function App() { // Ahora, el estado menuItems y ls lógica de updateStock está en MENUPROVIDER
 
   //Estado para controlar la vista principal (Disponibilidad o Pedir Comida)
   const [isChooseFoodPage, setIsChooseFoodPage] = useState(false); 
@@ -59,35 +61,13 @@ function App() {
 
   // Función para manejar la vuelta al menú desde FoodOrder
   const handleReturnToMenu = () => {
-    setSelectedFoodItem(null); // Limpiar la selección vuelve a la vista Foods
+    setSelectedFoodItem(null); // Limpia la selección vuelve a la vista Foods
   };
 
-  // Función para actualizar el stock cuando se confirma un pedido
-  // Requisito AC 5.1 - Propagar cambios al padre (App)
-  const handleUpdateStock = (id: number, orderedQuantity: number) => {
-    console.log(`APP: Pedido recibido - ID: ${id}, Cantidad: ${orderedQuantity}`);
-    setMenuItems(prevItems => {
-
-      // Creamos una NUEVA copia del array para actualizar el estado
-      const newItems = prevItems.map(item => {
-        if (item.id === id) {
-          // Si es el item correcto, crea un NUEVO objeto item con la cantidad actualizada
-          const newQuantity = item.quantity - orderedQuantity;
-          console.log(`APP: Actualizando stock para ${item.name}. Antes: ${item.quantity}, Pedido: ${orderedQuantity}, Ahora: ${newQuantity}`); // Log
-          return {
-            ...item, // Copia las propiedades existentes
-            quantity: newQuantity >= 0 ? newQuantity : 0 // Actualiza la cantidad
-          };
-        }
-        return item;
-      });
-      return newItems; 
-    });
-
-
-  };
+// LA FUNCIÓN handleUpdateStock SE HA MOVIDO AL MenuProvider.
 
   return (
+  <MenuProvider initialItems={initialMenuItemsData}>
     <div className="App">
       <button
         className="toggleButton"
@@ -101,47 +81,53 @@ function App() {
 
       <h3 className="title">Comida Rápida Online</h3>
 
-      {/* Vista de Disponibilidad */}
+      {/* Ahora la vista de disponibilidad leerá menuITems del conexto*/}
       {!isChooseFoodPage && (
-        <>
-          <h4 className="subTitle">Menús Disponibles</h4>
-          <ul className="ulApp">
-            {menuItems.map((item) => (
-              <li key={item.id} className="liApp">
-                <p>{item.name}</p>
-                {/* Requisito AC 5.1 - Mostrar stock actualizado */}
-                <p>#{item.quantity}</p>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+          <AvailableStockView /> // Componente que consume el contexto para mostrar stock
+        )}
 
-      {/* Vista de Pedir Comida (Carta o Detalles del pedido) */}
-      {isChooseFoodPage && (
-        <> {}
-          {/* Si NO hay un item seleccionado, muestra la carta (LazyFoods) */}
-          {!selectedFoodItem && (
-            <Suspense fallback={<div className="loadingFallback">Cargando carta ......</div>}>
-              <LazyFoods
-                foodItems={menuItems}
-                onFoodSelected={handleSelectFood} // Pasar la función de selección
+        {isChooseFoodPage && (
+          <>
+            {!selectedFoodItem && (
+              <Suspense fallback={<div className="loadingFallback">Cargando carta ......</div>}>
+                {/* LazyFoods podría también tomar menuItems del contexto */}
+                <LazyFoods
+                  onFoodSelected={handleSelectFood}
+                />
+              </Suspense>
+            )}
+
+            {selectedFoodItem && (
+              <FoodOrder
+                food={selectedFoodItem}
+                onReturnToMenu={handleReturnToMenu}
               />
-            </Suspense>
-          )}
-
-          {/* Si HAY un item seleccionado, muestra el formulario de pedido (FoodOrder) */}
-          {selectedFoodItem && (
-            <FoodOrder
-              food={selectedFoodItem} // Pasar el item seleccionado
-              onQuantityUpdated={handleUpdateStock} // Pasar la función de actualizar stock
-              onReturnToMenu={handleReturnToMenu} // Pasar la función para volver
-            />
-          )}
-        </>
-      )}
-    </div>
+            )}
+          </>
+        )}
+      </div>
+    </MenuProvider>
   );
 }
+
+// Componente separado para mostrar el stock disponible usando el contexto
+const AvailableStockView = () => {
+  const { menuItems } = useMenu(); 
+
+  return (
+    <>
+      <h4 className="subTitle">Menús Disponibles</h4>
+      <ul className="ulApp">
+        {menuItems.map((item) => (
+          <li key={item.id} className="liApp">
+            <p>{item.name}</p>
+            <p>#{item.quantity}</p>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+};
+
 
 export default App;
